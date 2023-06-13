@@ -8,12 +8,20 @@ require (
 	github.com/ethereum/go-ethereum v1.10.19
 )
 
+replace (
+	github.com/99designs/keyring => github.com/cosmos/keyring v1.1.7-0.20210622111912-ef00f8ac3d76
+	github.com/confio/ics23/go => github.com/cosmos/cosmos-sdk/ics23/go v0.8.0
+	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
+
+	github.com/tendermint/tendermint => github.com/cometbft/cometbft v0.34.27
+	google.golang.org/grpc => google.golang.org/grpc v1.33.2
+)
+
 require (
 	cosmossdk.io/math v1.0.0-beta.4
 	github.com/armon/go-metrics v0.4.1
 	github.com/btcsuite/btcd v0.22.2
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
-	github.com/cometbft/cometbft v0.37.1
 	github.com/cosmos/go-bip39 v1.0.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/gogo/protobuf v1.3.3
@@ -74,7 +82,6 @@ require (
 	github.com/cosmos/btcutil v1.0.4 // indirect
 	github.com/cosmos/cosmos-db v0.0.0-20221226095112-f3c38ecb5e32 // indirect
 	github.com/cosmos/cosmos-proto v1.0.0-beta.1 // indirect
-	github.com/cosmos/gogoproto v1.4.3 // indirect
 	github.com/cosmos/gorocksdb v1.2.0 // indirect
 	github.com/cosmos/iavl v0.19.5 // indirect
 	github.com/cosmos/ledger-cosmos-go v0.12.2 // indirect
@@ -139,6 +146,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
+	github.com/onsi/ginkgo v1.16.4 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.5 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
@@ -178,13 +186,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	nhooyr.io/websocket v1.8.6 // indirect
 )
-
-replace (
-	github.com/99designs/keyring => github.com/cosmos/keyring v1.1.7-0.20210622111912-ef00f8ac3d76
-	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
-
-	github.com/tendermint/tendermint => github.com/cometbft/cometbft v0.34.27
-	google.golang.org/grpc => google.golang.org/grpc v1.33.2
-)
-
-replace github.com/confio/ics23/go => github.com/cosmos/cosmos-sdk/ics23/go v0.8.0

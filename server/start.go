@@ -18,8 +18,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	tcmd "github.com/cometbft/cometbft/cmd/cometbft/commands"
 	abciserver "github.com/tendermint/tendermint/abci/server"
+	tmcfg "github.com/tendermint/tendermint/config"
 	tmos "github.com/tendermint/tendermint/libs/os"
 	"github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/p2p"
@@ -47,6 +47,8 @@ import (
 	srvflags "github.com/evmos/ethermint/server/flags"
 	ethermint "github.com/evmos/ethermint/types"
 )
+
+var defaultConfig = tmcfg.DefaultConfig()
 
 // StartCmd runs the service passed in, either stand-alone or in-process with
 // Tendermint.
@@ -180,7 +182,7 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().Uint32(server.FlagStateSyncSnapshotKeepRecent, 2, "State sync snapshot to keep")
 
 	// add support for all Tendermint-specific command line options
-	tcmd.AddNodeFlags(cmd)
+	AddTMNodeFlags(cmd)
 	return cmd
 }
 
@@ -532,4 +534,83 @@ func openTraceWriter(traceWriterFile string) (w io.Writer, err error) {
 		os.O_WRONLY|os.O_APPEND|os.O_CREATE,
 		0o600,
 	)
+}
+
+var genesisHash []byte
+
+// AddTMNodeFlags is a direct copy of AddNodeFlags in github.com/cometbft/cometbft/cmd/cometbft/commands/run_node.go
+// which is helpful since the replace directive causes lots of version import issues
+func AddTMNodeFlags(cmd *cobra.Command) {
+	// bind flags
+	cmd.Flags().String("moniker", defaultConfig.Moniker, "node name")
+
+	// priv val flags
+	cmd.Flags().String(
+		"priv_validator_laddr",
+		defaultConfig.PrivValidatorListenAddr,
+		"socket address to listen on for connections from external priv_validator process")
+
+	// node flags
+	cmd.Flags().Bool("fast_sync", defaultConfig.FastSyncMode, "fast blockchain syncing")
+	cmd.Flags().BytesHexVar(
+		&genesisHash,
+		"genesis_hash",
+		[]byte{},
+		"optional SHA-256 hash of the genesis file")
+	cmd.Flags().Int64("consensus.double_sign_check_height", defaultConfig.Consensus.DoubleSignCheckHeight,
+		"how many blocks to look back to check existence of the node's "+
+			"consensus votes before joining consensus")
+
+	// abci flags
+	cmd.Flags().String(
+		"proxy_app",
+		defaultConfig.ProxyApp,
+		"proxy app address, or one of: 'kvstore',"+
+			" 'persistent_kvstore', 'counter', 'e2e' or 'noop' for local testing.")
+	cmd.Flags().String("abci", defaultConfig.ABCI, "specify abci transport (socket | grpc)")
+
+	// rpc flags
+	cmd.Flags().String("rpc.laddr", defaultConfig.RPC.ListenAddress, "RPC listen address. Port required")
+	cmd.Flags().String(
+		"rpc.grpc_laddr",
+		defaultConfig.RPC.GRPCListenAddress,
+		"GRPC listen address (BroadcastTx only). Port required")
+	cmd.Flags().Bool("rpc.unsafe", defaultConfig.RPC.Unsafe, "enabled unsafe rpc methods")
+	cmd.Flags().String("rpc.pprof_laddr", defaultConfig.RPC.PprofListenAddress, "pprof listen address (https://golang.org/pkg/net/http/pprof)")
+
+	// p2p flags
+	cmd.Flags().String(
+		"p2p.laddr",
+		defaultConfig.P2P.ListenAddress,
+		"node listen address. (0.0.0.0:0 means any interface, any port)")
+	cmd.Flags().String("p2p.external-address",
+		defaultConfig.P2P.ExternalAddress, "ip:port address to advertise to peers for them to dial")
+	cmd.Flags().String("p2p.seeds", defaultConfig.P2P.Seeds, "comma-delimited ID@host:port seed nodes")
+	cmd.Flags().String("p2p.persistent_peers", defaultConfig.P2P.PersistentPeers, "comma-delimited ID@host:port persistent peers")
+	cmd.Flags().String("p2p.unconditional_peer_ids",
+		defaultConfig.P2P.UnconditionalPeerIDs, "comma-delimited IDs of unconditional peers")
+	cmd.Flags().Bool("p2p.upnp", defaultConfig.P2P.UPNP, "enable/disable UPNP port forwarding")
+	cmd.Flags().Bool("p2p.pex", defaultConfig.P2P.PexReactor, "enable/disable Peer-Exchange")
+	cmd.Flags().Bool("p2p.seed_mode", defaultConfig.P2P.SeedMode, "enable/disable seed mode")
+	cmd.Flags().String("p2p.private_peer_ids", defaultConfig.P2P.PrivatePeerIDs, "comma-delimited private peer IDs")
+
+	// consensus flags
+	cmd.Flags().Bool(
+		"consensus.create_empty_blocks",
+		defaultConfig.Consensus.CreateEmptyBlocks,
+		"set this to false to only produce blocks when there are txs or when the AppHash changes")
+	cmd.Flags().String(
+		"consensus.create_empty_blocks_interval",
+		defaultConfig.Consensus.CreateEmptyBlocksInterval.String(),
+		"the possible interval between empty blocks")
+
+	// db flags
+	cmd.Flags().String(
+		"db_backend",
+		defaultConfig.DBBackend,
+		"database backend: goleveldb | cleveldb | boltdb | rocksdb | badgerdb")
+	cmd.Flags().String(
+		"db_dir",
+		defaultConfig.DBPath,
+		"database directory")
 }
