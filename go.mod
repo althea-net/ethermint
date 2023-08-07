@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/cosmos/cosmos-sdk v0.45.16
-	github.com/cosmos/ibc-go/v4 v4.3.1
+	github.com/cosmos/ibc-go/v4 v4.4.2
 	github.com/ethereum/go-ethereum v1.10.19
 )
 
