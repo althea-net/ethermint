@@ -37,18 +37,23 @@ func init() {
 type Eip712SigVerificationDecorator struct {
 	ak              evmtypes.AccountKeeper
 	signModeHandler authsigning.SignModeHandler
+	evmChainId      string
 }
 
 // NewEip712SigVerificationDecorator creates a new Eip712SigVerificationDecorator
-func NewEip712SigVerificationDecorator(ak evmtypes.AccountKeeper, signModeHandler authsigning.SignModeHandler) Eip712SigVerificationDecorator {
+// Allows an optional EVM Chain ID (e.g. 1 for Ethereum Mainnet). The upstream Evmos repo requires the Cosmos Chain ID
+// to be parseable by a regex but evmChainId removes that restriction by allowing an override.
+func NewEip712SigVerificationDecorator(ak evmtypes.AccountKeeper, signModeHandler authsigning.SignModeHandler, evmChainId string) Eip712SigVerificationDecorator {
 	return Eip712SigVerificationDecorator{
 		ak:              ak,
 		signModeHandler: signModeHandler,
+		evmChainId:      evmChainId,
 	}
 }
 
 // AnteHandle handles validation of EIP712 signed cosmos txs.
 // it is not run on RecheckTx
+// Note that this decorator differs from the upstream repo by removing the chain ID format restriction
 func (svd Eip712SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (newCtx sdk.Context, err error) {
 	// no need to verify signatures on recheck tx
 	if ctx.IsReCheckTx() {
@@ -116,8 +121,20 @@ func (svd Eip712SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx,
 		accNum = acc.GetAccountNumber()
 	}
 
+	// Use the EVM Chain ID override or parse the Cosmos Chain ID if absent
+	var evmChainId string = svd.evmChainId
+	if evmChainId == "" {
+		cId, err := ethermint.ParseChainID(chainID)
+
+		if err != nil {
+			return ctx, sdkerrors.Wrapf(err, "failed to parse chainID: %s", chainID)
+		}
+		evmChainId = cId.String()
+	}
+
+	// Removed the need for chain ID format by adding the evmChainId parameter
 	signerData := authsigning.SignerData{
-		ChainID:       chainID,
+		ChainID:       evmChainId,
 		AccountNumber: accNum,
 		Sequence:      acc.GetSequence(),
 	}
@@ -127,7 +144,7 @@ func (svd Eip712SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx,
 	}
 
 	if err := VerifySignature(pubKey, signerData, sig.Data, svd.signModeHandler, authSignTx); err != nil {
-		errMsg := fmt.Errorf("signature verification failed; please verify account number (%d) and chain-id (%s): %w", accNum, chainID, err)
+		errMsg := fmt.Errorf("signature verification failed; please verify account number (%d) and chain-id (%s) and evm-chain-id (%s): %w", accNum, chainID, evmChainId, err)
 		return ctx, sdkerrors.Wrap(sdkerrors.ErrUnauthorized, errMsg.Error())
 	}
 
@@ -136,6 +153,7 @@ func (svd Eip712SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx,
 
 // VerifySignature verifies a transaction signature contained in SignatureData abstracting over different signing modes
 // and single vs multi-signatures.
+// Note that this decorator differs from the upstream repo by removing the chain ID format restriction, so signerData.ChainID is not parsed.
 func VerifySignature(
 	pubKey cryptotypes.PubKey,
 	signerData authsigning.SignerData,
@@ -174,11 +192,6 @@ func VerifySignature(
 			msgs, tx.GetMemo(),
 		)
 
-		signerChainID, err := ethermint.ParseChainID(signerData.ChainID)
-		if err != nil {
-			return sdkerrors.Wrapf(err, "failed to parse chainID: %s", signerData.ChainID)
-		}
-
 		txWithExtensions, ok := tx.(authante.HasExtensionOptionsTx)
 		if !ok {
 			return sdkerrors.Wrap(sdkerrors.ErrUnknownExtensionOptions, "tx doesnt contain any extensions")
@@ -199,8 +212,8 @@ func VerifySignature(
 			return sdkerrors.Wrap(sdkerrors.ErrInvalidChainID, "unknown extension option")
 		}
 
-		if extOpt.TypedDataChainID != signerChainID.Uint64() {
-			return sdkerrors.Wrap(sdkerrors.ErrInvalidChainID, "invalid chainID")
+		if fmt.Sprint(extOpt.TypedDataChainID) != signerData.ChainID {
+			return sdkerrors.Wrapf(sdkerrors.ErrInvalidChainID, "invalid chainID: (%s) != (%s)", extOpt.TypedDataChainID, signerData.ChainID)
 		}
 
 		if len(extOpt.FeePayer) == 0 {
