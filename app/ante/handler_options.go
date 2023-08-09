@@ -16,6 +16,8 @@ import (
 
 // HandlerOptions extend the SDK's AnteHandler options by requiring the IBC
 // channel keeper, EVM Keeper and Fee Market Keeper.
+// Note that this struct differs from the upstream repo by adding the optional EvmChainID override used in
+// EIP-712 signature verification instead of parsing the Cosmos Chain ID
 type HandlerOptions struct {
 	AccountKeeper   evmtypes.AccountKeeper
 	BankKeeper      evmtypes.BankKeeper
@@ -26,6 +28,7 @@ type HandlerOptions struct {
 	SignModeHandler authsigning.SignModeHandler
 	SigGasConsumer  func(meter sdk.GasMeter, sig signing.SignatureV2, params authtypes.Params) error
 	MaxTxGasWanted  uint64
+	EvmChainID      string
 }
 
 func (options HandlerOptions) validate() error {
@@ -104,7 +107,7 @@ func newCosmosAnteHandlerEip712(options HandlerOptions) sdk.AnteHandler {
 		ante.NewValidateSigCountDecorator(options.AccountKeeper),
 		ante.NewSigGasConsumeDecorator(options.AccountKeeper, options.SigGasConsumer),
 		// Note: signature verification uses EIP instead of the cosmos signature validator
-		NewEip712SigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
+		NewEip712SigVerificationDecorator(options.AccountKeeper, options.SignModeHandler, options.EvmChainID),
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 		ibcante.NewAnteDecorator(options.IBCKeeper),
 		NewGasWantedDecorator(options.EvmKeeper, options.FeeMarketKeeper),

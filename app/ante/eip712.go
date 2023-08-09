@@ -37,18 +37,23 @@ func init() {
 type Eip712SigVerificationDecorator struct {
 	ak              evmtypes.AccountKeeper
 	signModeHandler authsigning.SignModeHandler
+	evmChainId      string
 }
 
 // NewEip712SigVerificationDecorator creates a new Eip712SigVerificationDecorator
-func NewEip712SigVerificationDecorator(ak evmtypes.AccountKeeper, signModeHandler authsigning.SignModeHandler) Eip712SigVerificationDecorator {
+// Allows an optional EVM Chain ID (e.g. 1 for Ethereum Mainnet). The upstream Evmos repo requires the Cosmos Chain ID
+// to be parseable by a regex but evmChainId removes that restriction by allowing an override.
+func NewEip712SigVerificationDecorator(ak evmtypes.AccountKeeper, signModeHandler authsigning.SignModeHandler, evmChainId string) Eip712SigVerificationDecorator {
 	return Eip712SigVerificationDecorator{
 		ak:              ak,
 		signModeHandler: signModeHandler,
+		evmChainId:      evmChainId,
 	}
 }
 
 // AnteHandle handles validation of EIP712 signed cosmos txs.
 // it is not run on RecheckTx
+// Note that this decorator differs from the upstream repo by removing the chain ID format restriction
 func (svd Eip712SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (newCtx sdk.Context, err error) {
 	// no need to verify signatures on recheck tx
 	if ctx.IsReCheckTx() {
@@ -116,6 +121,18 @@ func (svd Eip712SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx,
 		accNum = acc.GetAccountNumber()
 	}
 
+	// There are two ChainIDs to verify, the Cosmos string and the EVM number. First try the EVM override value,
+	// then try to parse if no override provided
+	var evmChainID string = svd.evmChainId
+	if evmChainID == "" {
+		cId, err := ethermint.ParseChainID(chainID)
+
+		if err != nil {
+			return ctx, sdkerrors.Wrapf(err, "failed to parse chainID: %s", chainID)
+		}
+		evmChainID = cId.String()
+	}
+
 	signerData := authsigning.SignerData{
 		ChainID:       chainID,
 		AccountNumber: accNum,
@@ -126,8 +143,8 @@ func (svd Eip712SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx,
 		return next(ctx, tx, simulate)
 	}
 
-	if err := VerifySignature(pubKey, signerData, sig.Data, svd.signModeHandler, authSignTx); err != nil {
-		errMsg := fmt.Errorf("signature verification failed; please verify account number (%d) and chain-id (%s): %w", accNum, chainID, err)
+	if err := VerifySignature(pubKey, signerData, sig.Data, svd.signModeHandler, authSignTx, evmChainID); err != nil {
+		errMsg := fmt.Errorf("signature verification failed; please verify account number (%d) and chain-id (%s) and evm-chain-id (%s): %w", accNum, chainID, evmChainID, err)
 		return ctx, sdkerrors.Wrap(sdkerrors.ErrUnauthorized, errMsg.Error())
 	}
 
@@ -136,12 +153,15 @@ func (svd Eip712SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx,
 
 // VerifySignature verifies a transaction signature contained in SignatureData abstracting over different signing modes
 // and single vs multi-signatures.
+// Note that this decorator differs from the upstream repo by removing the chain ID format restriction, so signerData.ChainID is not parsed.
+// The evmChainID parameter is used instead of Cosmos ChainID parsing
 func VerifySignature(
 	pubKey cryptotypes.PubKey,
 	signerData authsigning.SignerData,
 	sigData signing.SignatureData,
 	_ authsigning.SignModeHandler,
 	tx authsigning.Tx,
+	evmChainID string,
 ) error {
 	switch data := sigData.(type) {
 	case *signing.SingleSignatureData:
@@ -174,11 +194,6 @@ func VerifySignature(
 			msgs, tx.GetMemo(),
 		)
 
-		signerChainID, err := ethermint.ParseChainID(signerData.ChainID)
-		if err != nil {
-			return sdkerrors.Wrapf(err, "failed to parse chainID: %s", signerData.ChainID)
-		}
-
 		txWithExtensions, ok := tx.(authante.HasExtensionOptionsTx)
 		if !ok {
 			return sdkerrors.Wrap(sdkerrors.ErrUnknownExtensionOptions, "tx doesnt contain any extensions")
@@ -199,8 +214,9 @@ func VerifySignature(
 			return sdkerrors.Wrap(sdkerrors.ErrInvalidChainID, "unknown extension option")
 		}
 
-		if extOpt.TypedDataChainID != signerChainID.Uint64() {
-			return sdkerrors.Wrap(sdkerrors.ErrInvalidChainID, "invalid chainID")
+		typedDataChainID := fmt.Sprint(extOpt.TypedDataChainID)
+		if typedDataChainID != evmChainID {
+			return sdkerrors.Wrapf(sdkerrors.ErrInvalidChainID, "eip-712 domain chainID: (%s) != (%s)", typedDataChainID, evmChainID)
 		}
 
 		if len(extOpt.FeePayer) == 0 {
