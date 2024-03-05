@@ -106,7 +106,8 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
 	if acct == nil {
-		acct = k.accountKeeper.NewAccountWithAddress(ctx, cosmosAddr)
+		acct = k.AccountProtoFn(cosmosAddr)
+		acct = k.accountKeeper.NewAccount(ctx, acct)
 	}
 
 	if err := acct.SetSequence(account.Nonce); err != nil {

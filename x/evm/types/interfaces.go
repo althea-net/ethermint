@@ -15,6 +15,7 @@ import (
 // AccountKeeper defines the expected account keeper interface
 type AccountKeeper interface {
 	NewAccountWithAddress(ctx sdk.Context, addr sdk.AccAddress) authtypes.AccountI
+	NewAccount(sdk.Context, authtypes.AccountI) authtypes.AccountI
 	GetModuleAddress(moduleName string) sdk.AccAddress
 	GetAllAccounts(ctx sdk.Context) (accounts []authtypes.AccountI)
 	IterateAccounts(ctx sdk.Context, cb func(account authtypes.AccountI) bool)

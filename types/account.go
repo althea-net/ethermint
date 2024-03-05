@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -50,6 +51,14 @@ func ProtoAccount() authtypes.AccountI {
 		BaseAccount: &authtypes.BaseAccount{},
 		CodeHash:    common.BytesToHash(emptyCodeHash).String(),
 	}
+}
+
+// ProtoAccountWithAddress is a drop-in replacement for accountKeeper.NewAccountWithAddress(), but requires the caller to
+// call accountKeeper.SetAccount() after calling this function
+func ProtoAccountWithAddress(addr sdk.AccAddress) authtypes.AccountI {
+	acc := ProtoAccount()
+	acc.SetAddress(addr)
+	return acc
 }
 
 // GetBaseAccount returns base account.
